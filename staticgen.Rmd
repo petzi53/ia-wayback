@@ -40,6 +40,13 @@ knitr::opts_chunk$set(
         highlight = T,
         prompt = T
         )
+### Set the global option options(stringsAsFactors = FALSE) 
+### inside a parent function and restore the option after the parent function exits
+if (!require("xfun"))
+        {install.packages("xfun", repos = 'http://cran.wu.ac.at/')
+        library(xfun)}
+xfun::stringsAsStrings()
+
 
 ### install and load some important packages
 ### https://github.com/tidyverse/tidyverse
@@ -175,6 +182,7 @@ sg_rawcrawl
 ```
 
 # Tidy data
+## Introduction
 
 At first we have to clean up our data frame of URLs to crawl. Tidying the timemap data frame is a multipe step procedure:
 
@@ -268,163 +276,260 @@ sg_crawllist <- get_crawllist(sg_cleancrawl, start = 13, live_url = "https://www
 saveRDS(sg_crawllist, file = "data/sg_crawllist.rds")
 sg_crawllist
 
+```
+
+```{r list-xml-docs}
+
+# bit.ly/SO-save-xml
+roundtrip <- function(obj) {
+  tf <- tempfile()
+  con <- file(tf, "wb")
+  on.exit(unlink(tf))
+
+  xml_serialize(obj, con)
+  close(con)
+  con <- file(tf, "rb")
+  on.exit(close(con), add = TRUE)
+  xml_unserialize(con)
+}
+
+
+# create a list of xml documents
+sg_crawllist <- readRDS("data/sg_crawllist.rds")
+my_xml <- read_html(sg_crawllist$link[1])
+
 sg_wbpg <- lapply(sg_crawllist$link, read_html)
-saveRDS(sg_wbpg, file = "data/sg_wbpg.rds")
-sg_wbpg
+
+test_wbpg <- sg_wbpg
+my_data <- test_wbpg
+con <- file("data/my_data", "wb")
+serialize(my_data, con)
+y <- roundtrip(test_wbpg[[1]])
 
 ```
 
 
-<!-- ```{r staticgen-filter} -->
-<!-- # clean timemap: take only the first entry of every year) -->
-<!-- staticgen_tm <- readRDS("data/staticgen_tm.rds") -->
-<!-- staticgen_tm$datetime <- as.POSIXct(staticgen_tm$datetime, format = "%a, %d %b %Y") -->
-<!-- staticgen_tm <- staticgen_tm %>% -->
-<!--   filter(rel == "memento") %>% -->
-<!--   select(link, datetime) %>% -->
-<!--   mutate(year = year(datetime)) %>% -->
-<!--   distinct(datetime, .keep_all = TRUE) %>%  # delete duplicate datetime -->
-<!--   # http://bit.ly/2K0oho0 -->
-<!--   group_by(year) %>% -->
-<!--   filter(datetime == min(datetime)) -->
-<!-- ``` -->
+# Web page crawl
+
+## Introduction
+
+We have stored the web pages as xml-documents in `sg_wbpg` and are now able to retrieve the relevant data for our analysis. Using the code inspector of Google Chrome we will eventually find two important items to retrieve content for our analysis.
+
+But there is a wicked problem: It turns out that the structure of the website has serveral times changed. So we have to inspect every instance of `sg_crawlist` interactively to detect how we can retrieve the data for our analysis. This means we have to go to the archived webpage and apply Google Chrome inspector to find out the HTML/XML node we have to apply. We can test our findings with the appropriate subsetting of `sg_wbpg`. 
+
+## HTML structure of websites
+
+It turns out that for all mementos the `h4` tag will produce the name of the static website generator.
+
+For the data values the situation is more complicated:
+
++ **Between 2014 and 2018** the data will scraped with the CSS class selector `.stats`. It produces for every name three values: repo stars, open issues, and repo forks.
++ **2019** needs the CSS class selector `.OpenSourceStat-fXFkTK`. This produces for every name four values: repo stars, open issues, repo forks, and twitter followers. Every value is followed by a `+` or `-` sign and the number of changes since the last update of the website. I delete the figure of changes as the last update is not relevant for my analysis, respectively my data will show the changes between the dates of the mementos retrieval.
++ **Live website** has with `OpenSourceStat-sc-1jlkb1d-2` still another CSS class selector. I am somewhat worried that future updates of the website will always have different CSS class selectors. It seems that the random endings after the dash are generated automatically by the Content Management Sysgtem (CMS).  
+
+## Dataframe with specific retrieval information
+
+For the main function `get_content` I will store specific retireval information with the following items:
+
++ Internet Archive link to crawl (from `sg_crawllist`)
++ datetime (from `sg_crawllist`)
++ Tag to retrieve the names ("h4")
++ CSS class to retrieve the data (".stat", ".OpenSourceStat-fXFkTK" and ".OpenSourceStat-sc-1jlkb1d-2")
++ Number of data items to build different columns
++ Specific information for cleaning up the data itmes (regex: "[:digit:]+")
+
+```{r sg-retrival}
+sg_crawllist <- readRDS("data/sg_crawllist.rds")
+get_names <- rep("h4", nrow(sg_crawllist))
+get_data <- c(rep(".stat", 5), ".OpenSourceStat-fXFkTK", ".OpenSourceStat-sc-1jlkb1d-2")
+get_cols <- c(rep(3L, 5), 4L, 4L)
+get_regex <- c(rep("", 5), rep("[:digit:]+",2))
+sg_retrieval <- cbind(sg_crawllist[1:2], get_names, get_data, get_cols, get_regex)
+names(sg_retrieval) <- c("link", "datetime", "name", "data", "n_cols", "regex")
+saveRDS(sg_retrieval, file = "data/sg_retrieval.rds")
+```
+
+# Analysis (stub)
+
+I will concentrate the analysis on four issues:
+
+1. Number of static web site generators for every memento.
+2. Name of the static generator.
+3. Number of stars for the repository as a proxy for its popularity.
+4. Number of repository forks as a proxy for the size of the developer community.
+
+Other data like open issues and followers on twitter are not included as they have in my opinion only a weak relationship with the dissemination of the web site generator. Perhaps the exclusion of twitter followers needs more reflection:
+
++ The display of the number of twitter followers started only around 2019.
++ As today (2019-07-31) only 37 static website generators have a twitter account.
++ Even leading static website frameworks (e.g., Next.js) have no twitter account.
++ The number of followers results not only from the popularity of the generator but also from interesting and well written tweeds.
 
 
-<!-- ## Reading the mementos into memory -->
-
-<!-- ```{r read-memento} -->
-<!-- mem <- read_memento(staticgen_tm$link[479]) -->
-<!-- readr::write_lines(mem, path = "data/staticgen_tm.txt") -->
-<!-- ``` -->
+## Memento 2014
 
 
-<!-- ```{r load-data} -->
-<!-- staticgen_avail <- readRDS("data/staticgen_avail.rds") -->
-<!-- staticgen_mntos <- readRDS("data/staticgen_mntos.rds") -->
-<!-- staticgen_tm <- readRDS("data/staticgen_tm.rds") -->
-<!-- ``` -->
+```{r memento-2014}
+# mem <- read_memento(sg_crawllist$link[1])
+# sg_test <- readRDS("data/sg_wbpg.rds")
+# load("data/sg_webpage.Rdata")
+# attach("data/sg_webpage.Rdata")
+
+xml_doc <- my_xml
+
+test_wbpg <- sg_wbpg
+
+write_xml(test_wbpg[[1]], "data/test_html", options = "format" )
+t <- readLines("data/test_html")
+
+con <- file("data/test1_xml", open = "wb")
+xml_serialize(test_wbpg[[1]], con)
+flush(con)
+close(con)
 
 
-<!-- ```{r read-web-achive-10} -->
-<!-- staticgen_arch10 <- read_html(staticgen_tm$link[10]) -->
-<!-- staticgen_arch10 %>%  -->
-<!--   html_nodes("h4") %>%  -->
-<!--   html_text() -->
-<!-- ``` -->
+con <- file("data/test1_xml", open = "rb")
+on.exit(close(con), add = TRUE)
+test1_xml <- xml_unserialize(con)
+memento2014 <- t
+memento2014 %>%
+  html_nodes("h4") %>%
+  html_text()
+memento2014  %>%
+  html_nodes(".stat") %>%
+  html_text()
+```
 
-<!-- ```{r read-web-achive-15} -->
-<!-- staticgen_arch15 <- read_html(staticgen_tm$link[15]) -->
-<!-- staticgen_arch15 %>%  -->
-<!--   html_nodes("h4") %>%  -->
-<!--   html_text() -->
-<!-- ``` -->
+<!-- ## Memento 2015 -->
 
-
-<!-- ```{r read-web-achive-17} -->
-<!-- staticgen_arch17 <- read_html(staticgen_tm$link[17]) -->
-<!-- staticgen_arch17 %>% -->
+<!-- ```{r memento-2015} -->
+<!-- memento2015 <- sg_wbpg[[2]] -->
+<!-- memento2015 %>% -->
 <!--   html_nodes("h4") %>% -->
 <!--   html_text() -->
-<!-- ``` -->
-
-
-<!-- ```{r scrap-values17} -->
-<!-- staticgen_values17 <- staticgen_arch17 %>%  -->
-<!--   html_nodes(".stat") %>%  -->
+<!-- memento2015  %>%  -->
+<!--   html_nodes(".stat") %>% -->
 <!--   html_text() -->
 <!-- ``` -->
 
+<!-- ## Memento 2016 -->
 
-<!-- ```{r read-web-achive-20} -->
-<!-- staticgen_arch20 <- read_html(staticgen_tm$link[20]) -->
-<!-- staticgen_arch20 %>%  -->
-<!--   html_nodes("h4") %>%  -->
-<!--   html_text() -->
-<!-- ``` -->
-
-
-<!-- ```{r scrap-name} -->
-<!-- staticgen_wbpg <- read_html("https://www.staticgen.com/") -->
-<!-- staticgen_name <- staticgen_wbpg %>%  -->
-<!--   html_nodes("h4") %>%  -->
-<!--   html_text() -->
-<!-- ``` -->
-
-<!-- ```{r scrap-values} -->
-<!-- staticgen_values <- staticgen_wbpg %>%  -->
-<!--   html_nodes(".OpenSourceStat-sc-1jlkb1d-2") %>%  -->
-<!--   html_text() -->
-<!-- ``` -->
-
-<!-- ```{r read-web-achive} -->
-<!-- staticgen_arch17 <- read_html(staticgen_tm$link[17]) -->
-<!-- staticgen_arch17 %>%  -->
-<!--   html_nodes("h4") %>%  -->
-<!--   html_text() -->
-<!-- ``` -->
-
-<!-- ```{r test-read-html} -->
-<!-- staticgen_list <- as.list(1:length((staticgen_clean))) -->
-<!-- for (i in 1:5) { -->
-<!--   read_html("https://www.staticgen.com/") -->
-<!-- } -->
-
-<!-- staticgen_2013 <- read_html(staticgen_clean$link[1]) -->
-<!-- staticgen_2014 <- read_html(staticgen_clean$link[2]) -->
-<!-- staticgen_2015 <- read_html(staticgen_clean$link[3]) -->
-<!-- staticgen_2016 <- read_html(staticgen_clean$link[4]) -->
-<!-- staticgen_2017 <- read_html(staticgen_clean$link[5]) -->
-<!-- staticgen_2018 <- read_html(staticgen_clean$link[6]) -->
-<!-- staticgen_2019 <- read_html(staticgen_clean$link[7]) -->
-
-<!-- staticgen_wbpg <- list( -->
-<!--   w2013 = staticgen_2013, -->
-<!--   w2014 = staticgen_2014, -->
-<!--   w2015 = staticgen_2015, -->
-<!--   w2016 = staticgen_2016, -->
-<!--   w2017 = staticgen_2017, -->
-<!--   w2018 = staticgen_2018, -->
-<!--   w2019 = staticgen_2019 -->
-<!--     ) -->
-
-<!-- saveRDS(staticgen_wbpg, file = "data/staticgen_wbpg.rds") -->
-
-<!-- staticgen_wbpg$w2019 %>% -->
+<!-- ```{r memento-2016} -->
+<!-- # mem <- read_memento(sg_crawllist$link[1]) -->
+<!-- memento2016 <- sg_wbpg[[3]] -->
+<!-- memento2016 %>% -->
 <!--   html_nodes("h4") %>% -->
 <!--   html_text() -->
+<!-- memento2016  %>%  -->
+<!--   html_nodes(".stat") %>% -->
+<!--   html_text() -->
+<!-- ``` -->
 
-<!-- saveRDS(staticgen_2013, file = "data/staticgen_2013.rds") -->
-<!-- saveRDS(staticgen_2014, file = "data/staticgen_2014.rds") -->
-<!-- saveRDS(staticgen_2015, file = "data/staticgen_2015.rds") -->
-<!-- saveRDS(staticgen_2016, file = "data/staticgen_2016.rds") -->
-<!-- saveRDS(staticgen_2017, file = "data/staticgen_2017.rds") -->
-<!-- saveRDS(staticgen_2018, file = "data/staticgen_2018.rds") -->
-<!-- saveRDS(staticgen_2019, file = "data/staticgen_2019.rds") -->
+<!-- ## Memento 2017 -->
 
-<!-- staticgen_2019 %>% -->
+<!-- ```{r memento-2017} -->
+<!-- memento2017 <- sg_wbpg[[4]] -->
+<!-- memento2017 %>% -->
 <!--   html_nodes("h4") %>% -->
 <!--   html_text() -->
-
-
-<!-- staticgen_wbpg <- lapply(staticgen_clean$link, read_html) -->
-
-
-<!-- test_read <- as_tibble(replicate(5, "https://www.staticgen.com/")) -->
-<!-- t <- lapply(test_read$value, read_html) -->
-<!-- names(t) <- paste("a", 1:length(t), sep = "") -->
-
-
-<!-- staticgen_list <- vector("list", 5) -->
-
-<!-- # http://bit.ly/2Ytz4L7 -->
-<!-- x <- as.list(1:5) -->
-<!-- names(x) <- paste("a", 1:length(x), sep = "") -->
-<!-- list2env(x , envir = .GlobalEnv) -->
-
-<!-- millenium <- function(n) { -->
-<!--   n <- n - 2000 -->
-<!--   return(n) -->
-<!-- } -->
-
+<!-- memento2017  %>%  -->
+<!--   html_nodes(".stat") %>% -->
+<!--   html_text() -->
 <!-- ``` -->
+
+<!-- ## Memento 2018 -->
+
+<!-- ```{r memento-2018} -->
+<!-- memento2018 <- sg_wbpg[[5]] -->
+<!-- memento2018 %>% -->
+<!--   html_nodes("h4") %>% -->
+<!--   html_text() -->
+<!-- memento2018  %>%  -->
+<!--   html_nodes(".stat") %>% -->
+<!--   html_text() -->
+<!-- ``` -->
+
+<!-- ## Memento 2019 -->
+
+<!-- ```{r memento-2019} -->
+<!-- memento2019 <- sg_wbpg[[6]] -->
+<!-- memento2019 %>%  -->
+<!--   html_nodes("h4") %>% -->
+<!--   html_text() -->
+<!-- memento2019  %>%  -->
+<!--   html_nodes(".OpenSourceStat-fXFkTK") %>% -->
+<!--   html_text() -->
+<!-- ``` -->
+
+<!-- ## Memento Live -->
+
+
+<!-- ```{r live-website} -->
+<!-- memento_live <- sg_wbpg[[7]] -->
+<!-- memento_live %>% -->
+<!--   html_nodes("h4") %>% -->
+<!--   html_text() -->
+<!-- memento_live  %>%  -->
+<!--   html_nodes(".OpenSourceStat-sc-1jlkb1d-2") %>% -->
+<!--   html_text() -->
+<!-- ``` -->
+
+
+# Producing data frames with the retrieved data
+
+To retrieve the content from the web pages stored in sg_retrieval we can use the following code:
+
+```{r get-content}
+# sg_wbpg <- readRDS("data/sg_wbpg.rds") does not work!!!!!!
+sg_retrieval <- readRDS("data/sg_retrieval.rds")
+# remember that I set global option `stringsAsFactors = FALSE`. 
+# See chunk `global-option` at the beginning of this file
+
+get_content <- function(xml_document, df_retrieval) {
+  sg_list = list()
+  for (i in 1:length(xml_document)) {
+    
+    # prepare specific retrieval modes
+    xml_doc <- xml_document[[i]]
+    name_node <- df_retrieval$name[i]
+    data_node <- df_retrieval$data[i]
+    extract_data <- df_retrieval$regex[i]
+    n_cols <- df_retrieval$n_cols[i]
+    
+    # retrieve data
+    sg_names <- xml_doc %>%
+      html_nodes(name_node) %>%
+      html_text()
+    sg_data <- xml_doc %>% 
+      html_nodes(data_node) %>%
+      html_text()
+    # delete second part of the string, starting with '+'
+    # these changes of days from the last update of web sites are not relevant for my analysis,
+    # because I am using the figures from the timed mementos
+    if (extract_data != '') {
+      sg_data <- as.integer(stringr::str_extract(sg_data, extract_data))
+    }
+    # convert character string to data frame with 3 or 4 columns. See: bit.ly/SO-vec-to-df
+    sg_data <- data.frame(matrix(sg_data, ncol = n_cols, byrow = TRUE))
+    sg_data <- data.frame(cbind(sg_names, sg_data))
+    if (n_cols == 3) {
+      names(sg_data) <- list("name", "repo_stars", "open_issues", "repo_forks")
+    }
+    if (n_cols == 4) {
+      names(sg_data) <- list("name", "repo_stars", "open_issues", "repo_forks", "twitter_followers")
+    }
+    
+    # append dataframe to end of the data_list
+    sg_list[[i]] <- sg_data
+  }
+  return(sg_list)
+}
+
+sg_data_collection <- get_content(sg_wbpg, sg_retrieval)
+saveRDS(sg_data_collection, file = "data/sg_data_collection.rds")
+
+
+
+```
+
 
