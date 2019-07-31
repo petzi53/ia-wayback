@@ -1,0 +1,210 @@
+---
+title: "Comparing Static Web Generators Over Time"
+author: "Peter Baumgartner"
+date: "`r Sys.Date()`"
+output:
+  html_notebook:
+    fig_caption: yes
+    number_sections: yes
+    pandoc_args: --number-offset=0,0
+    toc: yes
+    toc_depth: 4
+  word_document:
+    toc: yes
+    toc_depth: '4'
+  pdf_document:
+    pandoc_args: --number-offset=0,0
+    toc: yes
+    toc_depth: '4'
+    latex_engine: xelatex
+  github_document:
+    toc: yes
+    toc_depth: 4
+  html_document:
+    fig_caption: yes
+    keep_md: yes
+    number_sections: yes
+    pandoc_args: --number-offset=0,0
+    toc: yes
+    toc_depth: 4
+---
+
+# Setup
+
+```{r label = "global-options", highlight=TRUE}
+knitr::opts_chunk$set(
+        message = F,
+        error = F,
+        warning = F,
+        comment = NA,
+        highlight = T,
+        prompt = T
+        )
+### Set the global option options(stringsAsFactors = FALSE) 
+### inside a parent function and restore the option after the parent function exits
+if (!require("xfun"))
+        {install.packages("xfun", repos = 'http://cran.wu.ac.at/')
+        library(xfun)}
+xfun::stringsAsStrings()
+
+
+### install and load some important packages
+### https://github.com/tidyverse/tidyverse
+if (!require("tidyverse"))
+        {install.packages("tidyverse", repos = 'http://cran.wu.ac.at/')
+        library(tidyverse)}
+
+### above command installed and loaded the core tidyverse packages:
+# ggplot2:    data visualisation
+# tibble:     a modern take on data frames
+# tidyr:      data tidying
+# readr:      data import (csv, tsv, fwf)
+# purrr:      functional R programming
+# dplyr:      data (frame) manipulation
+# stringr:    string manipulation
+# forcats:    working with categorial varialbes
+# tidyselect: backend for the selecting functions of the 'tidyverse'. (?, new?)
+
+
+### My personal reminder for other important packages:
+### Working with times:
+# hms, for times.
+
+# lubridate, for date/times.
+if (!require("lubridate"))
+        {install.packages("lubridate", repos = 'http://cran.wu.ac.at/')
+        library(lubridate)}
+
+### Importing other types of data:
+# feather, for sharing with Python and other languages.
+# haven, for SPSS, SAS and Stata files.
+# httr, for web apis.
+# jsonlite for JSON.
+# readxl, for .xls and .xlsx files.
+# rvest, for web scraping.
+# xml2, for XML.
+
+### Modelling
+# modelr, for modelling within a pipeline
+# broom, for turning models into tidy data
+
+
+### Special packages for this article
+# reshape2, restructure and aggregate data using melt and dcast
+if (!require("reshape2"))
+        {install.packages("reshape2", repos = 'http://cran.wu.ac.at/')
+        library(reshape2)}
+
+### Load dataset
+sg_crawllist <- readRDS("data/sg_crawllist.rds")
+
+
+
+```
+
+```{r correct-next}
+sg_data_collection <- readRDS("data/sg_data_collection.rds")
+sg_data_collection[[6]]$name[2] <- "Next.js"
+saveRDS(sg_data_collection, file = "data/sg_data_collection.rds")
+sg_data_collection <- readRDS("data/sg_data_collection.rds")
+```
+
+
+
+```{r sg-numbers}
+
+sg_count = NULL
+for (i in 1:length(sg_data_collection)) {
+  sg_count[i] <- nrow(sg_data_collection[[i]])
+}
+sg_quantity <- data.frame(cbind(sg_crawllist[2], sg_count))
+sg_quantity$datetime <- as_date(as.POSIXct(sg_quantity$datetime))
+names(sg_quantity) <- c("Date of Archived Websites", "Number of Static Generators")
+ggplot(sg_quantity, aes(x = `Date of Archived Websites`, y = `Number of Static Generators`)) + 
+  geom_line()
+```
+
+
+
+
+```{r sg-data-first-10}
+
+get_sg_data <- function(df, l) {
+  sg_df <- data.frame()
+  for (i in 1:nrow(df)) {
+    row_content = NULL
+    sg_vec = NULL
+    my_name <- df[i,]
+    for (j in 1:length(l)) {
+      my_rank <-  which(l[[j]]$name == my_name)
+      if (!purrr::is_empty(my_rank)) {
+        row_content <- append(row_content, list(Rank = my_rank, 
+                                                Stars = as.integer(l[[j]]$repo_stars[my_rank]), 
+                                                Forks = as.integer(l[[j]]$repo_forks[my_rank])))
+      } else {
+        row_content <- append(row_content, list(Rank = NA, Stars = NA, Forks = NA))
+      }
+    }
+  sg_vec <- append(list(my_name), row_content)
+  sg_df <- data.frame(force_bind(sg_df, data.frame(sg_vec)))
+  }
+  
+  names(sg_df) <- c("Name", "Rank.Start", "Stars.Start", "Forks.Start",
+                            "Rank.2015", "Stars.2015", "Forks.2015",
+                            "Rank.2016", "Stars.2016", "Forks.2016",
+                            "Rank.2017", "Stars.2017", "Forks.2017",
+                            "Rank.2018", "Stars.2018", "Forks.2018",
+                            "Rank.2019", "Stars.2019", "Forks.2019",
+                            "Rank.End", "Stars.End", "Forks.End")
+  
+  return(sg_df)
+}
+
+# bit.ly/SO-rbind-colnames
+force_bind = function(df1, df2) {
+    colnames(df2) = colnames(df1)
+    dplyr::bind_rows(df1, df2)
+}
+
+
+
+sg_data <- get_sg_data(sg_names, sg_data_collection)
+saveRDS(sg_data, file = "data/sg_data.rds")
+
+```
+
+```{r draw-facets, fig.width=7, fig.height=10}
+sg_data <- readRDS("data/sg_data.rds")
+sg_temp <- select(sg_data, c("Name", starts_with("Stars")))
+order_names <- order(sg_temp$Name)
+sg_temp <-  sg_temp[order_names, ]
+
+# SEE: bit.ly/SO-flip-row-col
+sg_stars <- data.frame(t(sg_temp[-1]))
+colnames(sg_stars) <- sg_temp[, 1]
+rownames(sg_stars) <- sg_quantity[, 1]
+sg_stars <- as_tibble(rownames_to_column(sg_stars, var = "Date"))
+sg_stars$Date <- as.Date(sg_stars$Date)
+sg_stars_long  <- melt(sg_stars, id.vars = "Date", 
+                 variable.name = "Staticgen", value.name = "Stars")
+
+
+p <- ggplot(sg_stars_long, aes(x = Date, y = Stars)) + 
+  geom_line(aes(group = Staticgen)) +  
+  facet_wrap(~Staticgen, ncol = 3)
+p
+
+# #######################################################################
+# # SEE: bit.ly/SO-cols-to-rows
+# library(reshape2)
+# sg_wide <- dcast(melt(as.matrix(sg_temp)), Var2 ~ paste0('Stars', Var1), value.var = 'value')
+# 
+# # SEE: bit.ly/SO-first-row-col-names
+# # create a vector of the first row values and replace the column names
+# names(sg_wide) <-  unlist(sg_wide[1, ])
+# #remove the first row
+# sg_wide <- sg_wide[-1, ]
+# names(sg_wide)[1] <- "Name"
+
+```
+
