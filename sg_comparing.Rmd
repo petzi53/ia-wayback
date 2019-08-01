@@ -231,27 +231,7 @@ p <- ggplot(sg_forks_long, aes(x = Date, y = Forks)) +
 p
 ```
 
-```{r bump-chart-rankings, fig.width=7, fig.height=10}
-sg_data <- readRDS("data/sg_data.rds")
-sg_temp <- select(sg_data, c("Name", starts_with("Rank")))
-order_names <- order(sg_temp$Name)
-sg_temp <-  sg_temp[order_names, ]
-
-# SEE: bit.ly/SO-flip-row-col
-sg_rank <- data.frame(t(sg_temp[-1]))
-colnames(sg_rank) <- sg_temp[, 1]
-rownames(sg_rank) <- sg_quantity[, 1]
-sg_rank <- as_tibble(rownames_to_column(sg_rank, var = "Date"))
-sg_rank$Date <- as.Date(sg_rank$Date)
-sg_rank_long  <- melt(sg_rank, id.vars = "Date", 
-                 variable.name = "Staticgen", value.name = "Rank")
-
-
-# ggplot(data = sg_rank_long, aes(x = Date, y = Rank, group = Staticgen)) +
-#   geom_line(aes(color = Staticgen, alpha = 1), size = 2) +
-#   geom_point(aes(color = Staticgen, alpha = 1), size = 4) +
-#   scale_y_reverse(breaks = 1:nrow(sg_rank_long))
-
+```{r my-theme}
 my_theme <- function() {
 
   # Colors
@@ -287,69 +267,28 @@ my_theme <- function() {
     theme(plot.margin = unit(c(0.35, 0.2, 0.3, 0.35), "cm"))
 }
 
-# show.top.n <- 18
-# day <- rep(c(1,2,3,4,5,6,7), 18)
-# sg_rank_long <- cbind(sg_rank_long, day)
-
-# ggplot(data = sg_rank_long, aes(x = as.numeric(as.Date(Date, origin = as.Date("1970-01-01"))), y = Rank, group = Staticgen)) +
-#   geom_line(aes(color = Staticgen, alpha = 1), size = 2) +
-#   geom_point(aes(color = Staticgen, alpha = 1), size = 4) +
-#   geom_point(color = "#FFFFFF", size = 1) +
-#   scale_y_reverse(breaks = 1:show.top.n) +
-#   scale_x_continuous(breaks = 1:7, minor_breaks = 1:7, expand = c(.05, .05)) +
-#   geom_text(data = sg_rank_long %>% filter(Date == "2014-05-30"),
-#             aes(label = Staticgen, x = 0.5) , hjust = .85, fontface = "bold", color = "#888888", size = 4) +
-#   geom_text(data = sg_rank_long %>% filter(Date == "2019-07-30"),
-#             aes(label = Staticgen, x = 16.5) , hjust = 0.15, fontface = "bold", color = "#888888", size = 4) +
-#   coord_cartesian(ylim = c(1, show.top.n)) + 
-#   theme(legend.position = "none") +
-#   labs(x = "Competition days with medals",
-#        y = "Rank",
-#        title = "PyeongChang 2018 Olympic Winter Games",
-#        subtitle = "Countries ranked by overall medals after each competition day") +
-#   my_theme()
-
-# sg.rankings <- sg_rank_long %>%
-#   group_by(Date) %>%
-#   arrange(Date, Staticgen) %>%
-#   mutate(Date2 = as.Date(Date)) %>%
-#   as.data.frame()
-
-ggplot(data = sg_rank_long, aes(x = Date, y = Rank, group = Staticgen)) +
-  geom_line(aes(color = Staticgen, alpha = 1), size = 1) +
-  geom_point(aes(color = Staticgen, alpha = 1), size = 2) +
-  geom_point(color = "#FFFFFF", size = 1) +
-  scale_y_reverse(breaks = 1:nrow(sg_rank_long)) +
-  my_theme() +
-  theme(legend.position = "right")
-
 ```
 
-```{r draw-bump-chart, , fig.width=9, fig.height=10}
-# day <- rep(c(1,2,3,4,5,6,7), 18)
-# sg_rank_long <- cbind(sg_rank_long, day)
 
-# ggplot(data = sg_rank_long, aes(x = as.numeric(as.Date(Date, origin = as.Date("1970-01-01"))), y = Rank, group = Staticgen)) +
 
-# show.top.n <- 18
-# ggplot(data = sg_rank_long, aes(x = as.numeric(as.Date(Date)), y = Rank, group = Staticgen)) +
-#   geom_line(aes(color = Staticgen, alpha = 1), size = 2) +
-#   geom_point(aes(color = Staticgen, alpha = 1), size = 4) +
-#   geom_point(color = "#FFFFFF", size = 1) +
-#   scale_y_reverse(breaks = 1:show.top.n) +
-#   scale_x_continuous(breaks = 1:7, minor_breaks = 1:7, expand = c(.05, .05)) +
-#   geom_text(data = sg_rank_long %>% filter(Date == "2014-05-30"),
-#             aes(label = Staticgen, x = 0.5) , hjust = .85, fontface = "bold", color = "#888888", size = 4) +
-#   geom_text(data = sg_rank_long %>% filter(Date == "2019-07-30"),
-#             aes(label = Staticgen, x = 16.5) , hjust = 0.15, fontface = "bold", color = "#888888", size = 4) +
-#   coord_cartesian(ylim = c(1, show.top.n)) +
-#   theme(legend.position = "none") +
-#   labs(x = "Competition days with medals",
-#        y = "Rank",
-#        title = "PyeongChang 2018 Olympic Winter Games",
-#        subtitle = "Countries ranked by overall medals after each competition day") +
-#   my_theme()
+```{r bump-chart-rankings, fig.width=9, fig.height=10}
+sg_data <- readRDS("data/sg_data.rds")
+sg_temp <- select(sg_data, c("Name", starts_with("Rank")))
+order_names <- order(sg_temp$Name)
+sg_temp <-  sg_temp[order_names, ]
 
+# SEE: bit.ly/SO-flip-row-col
+sg_rank <- data.frame(t(sg_temp[-1]))
+colnames(sg_rank) <- sg_temp[, 1]
+rownames(sg_rank) <- sg_quantity[, 1]
+sg_rank <- as_tibble(rownames_to_column(sg_rank, var = "Date"))
+sg_rank$Date <- as.Date(sg_rank$Date)
+sg_rank_long  <- melt(sg_rank, id.vars = "Date", 
+                 variable.name = "Staticgen", value.name = "Rank")
+
+
+
+# SEE: https://www.statology.org/how-to-easily-create-a-bump-chart-in-r-using-ggplot2/
 ggplot(sg_rank_long, aes(x = as.factor(day), y = Rank, group = Staticgen)) +
   geom_line(aes(color = Staticgen, alpha = 1), size = 1) +
   geom_point(aes(color = Staticgen, alpha = 1), size = 2) +
